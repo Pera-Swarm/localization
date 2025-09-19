@@ -6,6 +6,8 @@ import math
 import time
 import yaml
 from time import sleep
+from picamera2 import Picamera2, Preview
+
 # import threading
 
 CONFIG_MQTT = 'config-mqtt.yaml'
@@ -13,6 +15,15 @@ CONFIG_MAPPING = 'config-mapping.yaml'
 CONFIG_CAMERA = 'board/calibration_data.txt'
 
 camera_id = 0
+picam2 = Picamera2()
+#picam2.start_preview(Preview.NULL)
+#picam2.configure(picam2.create_preview_configuration(main={"format": "YUV420", "size": (2028, 1520)}))
+picam2.configure(picam2.create_preview_configuration(main={"format": "RGB888", "size": (2028, 1520)}))
+#picam2.configure(picam2.create_preview_configuration(main={"format": "RGB888", "size": (1280, 720)}))
+#picam2.configure(picam2.create_still_configuration(main={"format": "RGB888", "size": (1280, 720)}))
+
+picam2.start()
+print("Camera started successfully")  
 
 capture_interval = 0.005
 capture_skips = 16
@@ -72,7 +83,7 @@ def mqtt_setup():
     client.on_message = on_message
     
     # TODO: Config username and password
-    # client.username_pw_set("username", "password")
+    client.username_pw_set("swarm-user-1", "sW@rm!")
 
     client.connect(mqtt_server, mqtt_port, mqtt_keepalive)
     time.sleep(2)
@@ -147,7 +158,7 @@ def on_message(client, userdata, msg):
 # dictionary = cv.aruco.Dictionary_get(cv.aruco.DICT_6X6_250)
 dictionary = cv.aruco.getPredefinedDictionary(cv.aruco.DICT_6X6_250)
 
-# parameters = cv.aruco.DetectorParameters_create()
+#parameters = cv.aruco.DetectorParameters_create()
 parameters = cv.aruco.DetectorParameters()
 
 # -- Load camera calibrations --------------------------------------------------
@@ -178,17 +189,16 @@ if __name__ == '__main__':
     '''
 
     print('Press "q" to quit')
-
-    capture = cv.VideoCapture(0)
-    if capture.isOpened():  # try to get the first frame
-        frame_captured, frame = capture.read()
-    else:
-        frame_captured = False
-
+    frame = picam2.capture_array()
+    frame_captured = frame is not None
     i = 0
 
     while frame_captured:
-        frame_captured, frame = capture.read()
+        frame = picam2.capture_array()
+        frame_captured = frame is not None
+      
+        if not frame_captured:  
+            break
 
         # print(i)
         i += 1
@@ -204,6 +214,10 @@ if __name__ == '__main__':
 
         markerCorners, markerIds, rejectedCandidates = cv.aruco.detectMarkers(
             frame, dictionary, parameters=parameters)
+        #detector = cv.aruco.ArucoDetector(dictionary, parameters)
+        #markerCorners, markerIds, rejectedCandidates = detector.detectMarkers(
+        #    frame, dictionary, parameters=parameters)
+        
 
         # Non-empty array of markers
         if (type(markerIds) != type(None)):
@@ -219,24 +233,29 @@ if __name__ == '__main__':
 
                 x = math.floor(coordinate[0])  # center = 0
                 y = math.floor(coordinate[1])  # center = 0
+                z = math.floor(coordinate[2])  # center = 0
                 # [-180, 180]
                 heading = math.floor(-1 *
                                      ((rvecs[i][0][1] / math.pi) * 180.0) + 90)
 
                 res = transXY(x, y)
-                print(id, x, y, ">", res[0], res[1])  # rvecs[i],
-
+                print(id, x, y, z, ">", res[0], res[1], res[2])  # rvecs[i],
                 update_robot(id, res[0], res[1], heading)
 
                 # Display marker coordinates with x,y,z axies
-                cv.aruco.drawAxis(frame, cameraMatrix,
+                #cv.aruco.drawAxis(frame, cameraMatrix,
+                #                  distCoeffs, rvecs[i], tvecs[i], 100)
+                cv.drawFrameAxes(frame, cameraMatrix,
                                   distCoeffs, rvecs[i], tvecs[i], 100)
 
+        # TODO:
         cv.imshow('Marker Detector', frame)
 
         if cv.waitKey(1) & 0xFF == ord('q'):
             break
 
     # When everything done, release the capture
-    capture.release()
+    #capture.release()
+    #cv.destroyAllWindows()
+    picam2.stop()  # Add this line
     cv.destroyAllWindows()
