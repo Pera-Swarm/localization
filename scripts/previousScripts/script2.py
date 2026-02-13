@@ -1,21 +1,29 @@
-
-
 # ------------------------------------------------------------
 # Example using openCV aruco library
 # ------------------------------------------------------------
-
-
 import cv2 as cv
-import numpy as np
+from typing import Optional
 
 # Load the predefined dictionary
-dictionary = cv.aruco.Dictionary_get(cv.aruco.DICT_6X6_250)
-
-# Load the dictionary that was used to generate the markers.
-dictionary = cv.aruco.Dictionary_get(cv.aruco.DICT_6X6_250)
+dictionary = cv.aruco.getPredefinedDictionary(cv.aruco.DICT_6X6_250)
 
 # Initialize the detector parameters using default values
-parameters = cv.aruco.DetectorParameters_create()
+parameters = cv.aruco.DetectorParameters()
+
+if hasattr(cv.aruco, "ArucoDetector"):
+    detector: Optional[cv.aruco.ArucoDetector] = cv.aruco.ArucoDetector(
+        dictionary,
+        parameters,
+    )
+else:
+    detector = None
+
+
+def detect_markers(frame):
+    if detector is not None:
+        return detector.detectMarkers(frame)
+    return cv.aruco.detectMarkers(frame, dictionary, parameters=parameters)
+
 
 if __name__ == '__main__':
     print('Press "q" to quit')
@@ -30,13 +38,14 @@ if __name__ == '__main__':
         # Detect the markers in the image
         # markers = detect_markers(frame)
 
-        # detectMarkers(inputImage, dictionary, markerCorners, markerIds, parameters, rejectedCandidates);
-        markerCorners, markerIds, rejectedCandidates = cv.aruco.detectMarkers(frame, dictionary, parameters=parameters)
+        # detectMarkers(inputImage, dictionary, markerCorners,
+        #               markerIds, parameters, rejectedCandidates)
+        markerCorners, markerIds, rejectedCandidates = detect_markers(frame)
 
-        if(markerIds!= None):
+        if markerIds is not None:
 
             # drawDetectedMarkers(outputImage, markerCorners, markerIds)
-            cv.aruco.drawDetectedMarkers(frame, markerCorners, markerIds);
+            cv.aruco.drawDetectedMarkers(frame, markerCorners, markerIds)
 
             for marker in markerIds:
                 print(marker)
@@ -52,6 +61,7 @@ if __name__ == '__main__':
     cv.destroyAllWindows()
 
 
+# estimatePoseSingleMarkers(markerCorners, size_of_marker_in_real,
+#                           cameraMatrix, distCoeffs, rvecs, tvecs)
 
-# estimatePoseSingleMarkers(markerCorners, size_of_marker_in_real, cameraMatrix, distCoeffs, rvecs, tvecs);
 

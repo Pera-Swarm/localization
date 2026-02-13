@@ -14,7 +14,8 @@ import glob
 
 
 def save_coefficients(mtx, dist, path):
-    # Save the camera matrix and the distortion coefficients to given path/file.
+    # Save the camera matrix and the distortion coefficients to given
+    # path/file.
     cv_file = cv2.FileStorage(path, cv2.FILE_STORAGE_WRITE)
     cv_file.write("K", mtx)
     cv_file.write("D", dist)
@@ -44,21 +45,27 @@ objp[:, :2] = np.mgrid[0:7, 0:6].T.reshape(-1, 2)
 # Arrays to store object points and image points from all the images.
 objpoints = []  # 3d point in real world space
 imgpoints = []  # 2d points in image plane.
+image_size = None
 
-images = glob.glob('./sample/*.jpg')
+images = glob.glob('./sample/*.png')
 
 for fname in images:
     img = cv2.imread(fname)
+    if img is None:
+        continue
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    if image_size is None:
+        image_size = gray.shape[::-1]
 
     # Find the chess board corners
     ret, corners = cv2.findChessboardCorners(gray, (7, 6), None)
 
     # If found, add object points, image points (after refining them)
-    if ret == True:
+    if ret:
         objpoints.append(objp)
 
-        corners2 = cv2.cornerSubPix(gray, corners, (11, 11), (-1, -1), criteria)
+        corners2 = cv2.cornerSubPix(gray, corners, (11, 11), (-1, -1),
+                                    criteria)
         imgpoints.append(corners2)
 
         # Draw and display the corners
@@ -68,6 +75,12 @@ for fname in images:
 
 cv2.destroyAllWindows()
 
+if not objpoints:
+    raise RuntimeError("No valid chessboard detections found in ./sample/*.jpg")
+
+if image_size is None:
+    raise RuntimeError("No readable images found in ./sample/*.jpg")
+
 print('objpoints')
 print(objpoints)
 
@@ -76,7 +89,13 @@ print(imgpoints)
 
 # Camera Calibration ----------------------------------------------------------
 
-ret, cameraMatrix, distCoeffs, rvecs, tvecs = cv2.calibrateCamera(objpoints, imgpoints, gray.shape[::-1], None, None)
+ret, cameraMatrix, distCoeffs, rvecs, tvecs = cv2.calibrateCamera(
+    objpoints,
+    imgpoints,
+    image_size,
+    None,
+    None,
+)
 # print(cameraMatrix)
 # print(distCoeffs)
 
@@ -88,12 +107,13 @@ cameraMatrix, distCoeffs = load_coefficients('./calibration_data.txt')
 
 # Error estimations ----------------------------------------------------------
 
-mean_error = 0
-tot_error = 0
+tot_error = 0.0
 
 for i in range(len(objpoints)):
-    imgpoints2, _ = cv2.projectPoints(objpoints[i], rvecs[i], tvecs[i], cameraMatrix, distCoeffs)
+    imgpoints2, _ = cv2.projectPoints(objpoints[i], rvecs[i], tvecs[i],
+                                      cameraMatrix, distCoeffs)
     error = cv2.norm(imgpoints[i], imgpoints2, cv2.NORM_L2) / len(imgpoints2)
     tot_error += error
 
-print(["total error: ", mean_error / len(objpoints)])
+mean_error = tot_error / len(objpoints)
+print(["total error: ", mean_error])

@@ -1,58 +1,96 @@
+# Swarm Robotics Localization
+
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
-# FYP-localization-robots
+Python tooling for ArUco-based localization, marker generation, and camera calibration.
 
-Python repository for address the Localization problem of Swarm Robotics
+## Project structure
 
-### Requirements
+- markers/ - Generate ArUco marker PNGs and a PDF.
+- scripts/ - Main localization pipeline (OpenCV + MQTT) and supporting tools.
+- scripts/board/ - Camera calibration workflow.
+- scripts/previousScripts/ - Legacy demos and prototypes.
+- docs/ - External documentation entry point.
 
-Please install following pip packages if they aren't pre-installed
+## Shared virtual environment
 
-```
-pip install numpy
+This repo uses a shared root .venv and a single global requirements.txt.
 
-pip install aruco
-pip install paho-mqtt
-pip3 install opencv-python
-pip3 install opencv-contrib-python
-pip3 install pyyaml
-```
+Windows PowerShell:
 
-or use following command
-
-```
-pip install -r requirement.txt
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
 ```
 
-You need to copy and rename the following files in _scripts_ directory and fill the necessary configuration details before run the scripts.
+macOS/Linux:
 
-- config-mapping_sample.yaml INTO config-mapping.yaml
-- config-mqtt_sample.yaml INTO config-mqtt.yaml
-
-### Run the scripts
-
-You can try scripts on the ./scripts/ directory
-
-### Build a executable file (not working so far)
-
-Install PyInstaller from PyPI:
-
-```
-pip install pyinstaller
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
 ```
 
-Go to your program’s directory and run:
+## Configuration
 
+If you run `./run.sh` (Unix-like shells), missing configs are auto-created from samples on first run.
+If you run `python scripts/script.py` directly, copy the sample configs in scripts/ first:
+
+- scripts/config-mapping_sample.yaml -> scripts/config-mapping.yaml
+- scripts/config-mqtt_sample.yaml -> scripts/config-mqtt.yaml
+
+## Entry points
+
+Markers:
+
+```powershell
+cd markers
+python marker_generator.py
 ```
-pyinstaller --onefile script.py
+
+Localization pipeline:
+
+```powershell
+cd scripts
+python script.py
 ```
 
-After, please make sure to copy the './board' folder into the directory which executes the exe file.
+Calibration:
 
-### Read More
+```powershell
+cd scripts/board
+python calibrate.py
+```
 
-- [ar-markers 0.5.0](https://pypi.org/project/ar-markers/)
-- [Augmented Reality using ArUco Markers in OpenCV (C++ / Python)](https://www.learnopencv.com/augmented-reality-using-aruco-markers-in-opencv-c-python/)
-- [OpenCV: Detection of ArUco Markers](https://docs.opencv.org/trunk/d5/dae/tutorial_aruco_detection.html)
-- [OpenCV: Detection of ArUco Boards](https://docs.opencv.org/master/db/da9/tutorial_aruco_board_detection.html)
-- [Calibrating the board](https://mecaruco2.readthedocs.io/en/latest/notebooks_rst/Aruco/sandbox/ludovic/aruco_calibration_rotation.html)
+Legacy demos:
+
+```powershell
+cd scripts/previousScripts
+python script2.py
+```
+
+## Outputs
+
+- markers/generated/ - PNG marker images
+- markers/aruco_markers.pdf - Generated marker PDF
+- scripts/board/calibration_data.txt - Saved calibration data
+
+## Troubleshooting
+
+- cv2.aruco missing: install opencv-contrib-python (not opencv-python only).
+- MyPy import-untyped: reportlab has no type hints; ignore or add a stub package.
+- Camera not opening: try a different camera index in scripts/script.py.
+- MQTT connection errors: verify scripts/config-mqtt.yaml values and broker reachability.
+
+## Notes
+
+- run.sh is a convenience script for Unix-like shells. On Windows, use the commands above.
+- Raspberry Pi camera script is documented in scripts/README.md.
+
+## Read more
+
+- [ar-markers](https://pypi.org/project/ar-markers/)
+- [Augmented Reality using ArUco Markers in OpenCV](https://www.learnopencv.com/augmented-reality-using-aruco-markers-in-opencv-c-python/)
+- [OpenCV ArUco detection](https://docs.opencv.org/master/d5/dae/tutorial_aruco_detection.html)
+- [OpenCV ArUco board detection](https://docs.opencv.org/master/db/da9/tutorial_aruco_board_detection.html)
