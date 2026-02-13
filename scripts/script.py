@@ -62,7 +62,7 @@ update_heading_threshold = 2  # degrees
 ensure_required_file(
     CONFIG_MAPPING,
     'mapping config',
-    'config-mapping_sample.yaml',
+    'config-mapping.yaml',
 )
 with open(CONFIG_MAPPING, 'r', encoding='utf-8') as file:
     mapping_data = yaml.load(file, Loader=yaml.Loader)
