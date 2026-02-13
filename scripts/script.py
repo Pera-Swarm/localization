@@ -1,12 +1,26 @@
 import cv2 as cv
 import numpy as np
-import paho.mqtt.client as paho
+import importlib
 import json
 import math
 import time
-import yaml
+from typing import Any, Dict, Optional, Tuple
 from time import sleep
 # import threading
+
+try:
+    paho = importlib.import_module("paho.mqtt.client")
+except ImportError as exc:
+    raise RuntimeError(
+        "Missing dependency 'paho-mqtt'. Install with: pip install paho-mqtt"
+    ) from exc
+
+try:
+    yaml = importlib.import_module("yaml")
+except ImportError as exc:
+    raise RuntimeError(
+        "Missing dependency 'pyyaml'. Install with: pip install pyyaml"
+    ) from exc
 
 CONFIG_MQTT = 'config-mqtt.yaml'
 CONFIG_MAPPING = 'config-mapping.yaml'
@@ -21,8 +35,8 @@ fps = 1/(capture_interval*capture_skips)
 
 print('fps: ', fps)
 
-# -- Coordinate system variables -----------------------------------------------
-robots = {}
+# -- Coordinate system variables ---------------------------------------------
+robots: Dict[int, Dict[str, Any]] = {}
 update_xy_threshold = 10  # units
 update_heading_threshold = 2  # degrees
 
@@ -34,9 +48,9 @@ with open(CONFIG_MAPPING, 'r') as file:
 
 # -- MQTT variables -----------------------------------------------------------
 
-sub_topic_update = "v1/localization/update/?"
-sub_topic_publish = "v1/localization/update"
-sub_topic_create = "v1/robot/create"
+sub_topic_update = "v10/localization/update/?"
+sub_topic_publish = "v10/localization/update"
+sub_topic_create = "v10/robot/create"
 # temp topics, for debug purposes
 # sub_topic_update_robot="v1/localization/update/robot"
 
@@ -46,6 +60,8 @@ with open(CONFIG_MQTT, 'r') as file:
     mqtt_server = mqtt_data['mqtt_server']
     mqtt_port = mqtt_data['mqtt_port']
     mqtt_keepalive = mqtt_data['mqtt_keepalive']
+    mqtt_username = mqtt_data.get('mqtt_username')
+    mqtt_password = mqtt_data.get('mqtt_password')
 
 
 def transXY(camX, camY):
@@ -61,7 +77,7 @@ def transXY(camX, camY):
     return projected
 
 
-# -- MQTT loop thread function - NOT WORKING FOR NOW ---------------------------
+# -- MQTT loop thread function - NOT WORKING FOR NOW -------------------------
 def mqtt_loop(client):
     client.loop()
 
@@ -70,9 +86,9 @@ def mqtt_setup():
     client = paho.Client()
     client.on_connect = on_connect
     client.on_message = on_message
-    
-    # TODO: Config username and password
-    # client.username_pw_set("username", "password")
+
+    if mqtt_username and mqtt_password:
+        client.username_pw_set(mqtt_username, mqtt_password)
 
     client.connect(mqtt_server, mqtt_port, mqtt_keepalive)
     time.sleep(2)
@@ -88,9 +104,14 @@ def update_robot(id, x, y, heading):
     if id in robots:
         old = robots[id]
         update_queue = []
-        if ((math.sqrt(abs(pow(x - old['x'], 2) + pow(y - old['y'], 2))) >= update_xy_threshold)) or (abs(old['heading'] - heading) >= update_heading_threshold):
+        distance = math.sqrt(abs(pow(x - old['x'], 2) + pow(y - old['y'], 2)))
+        heading_delta = abs(old['heading'] - heading)
+        if (
+            (distance >= update_xy_threshold)
+            or (heading_delta >= update_heading_threshold)
+        ):
 
-            # update the server about new coordinates, if there is any significant difference
+            # update the server if there is any significant difference
             robots[id]['id'] = id
             robots[id]['x'] = -1*x
             robots[id]['y'] = y
@@ -128,8 +149,6 @@ def on_connect(client, userdata, flags, rc):
 def on_message(client, userdata, msg):
     # print(msg.topic+" > "+str(msg.payload, 'utf-8'))
     topic = msg.topic
-    body = str(msg.payload, 'utf-8')
-
     if (topic == sub_topic_update):
         # Update the coordinates of all active robots
         client.publish(sub_topic_publish, json.dumps(
@@ -141,16 +160,40 @@ def on_message(client, userdata, msg):
     #     update_robot(d['id'], d['x'], d['y'], d['heading'])
 
 
-# -- OpenCV Image processing ---------------------------------------------------
+# -- OpenCV Image processing -------------------------------------------------
 
 # Load the predefined dictionary
-# dictionary = cv.aruco.Dictionary_get(cv.aruco.DICT_6X6_250)
 dictionary = cv.aruco.getPredefinedDictionary(cv.aruco.DICT_6X6_250)
 
-# parameters = cv.aruco.DetectorParameters_create()
 parameters = cv.aruco.DetectorParameters()
 
-# -- Load camera calibrations --------------------------------------------------
+if hasattr(cv.aruco, "ArucoDetector"):
+    detector: Optional[cv.aruco.ArucoDetector] = cv.aruco.ArucoDetector(
+        dictionary,
+        parameters,
+    )
+else:
+    detector = None
+
+
+def detect_markers(
+    frame,
+) -> Tuple[Any, Optional[np.ndarray], Any]:
+    if detector is not None:
+        return detector.detectMarkers(frame)
+    return cv.aruco.detectMarkers(frame, dictionary, parameters=parameters)
+
+
+def draw_axes(frame, camera_matrix, dist_coeffs, rvec, tvec, length) -> None:
+    if hasattr(cv, "drawFrameAxes"):
+        cv.drawFrameAxes(frame, camera_matrix, dist_coeffs, rvec, tvec, length)
+    else:
+        draw_axis = getattr(cv.aruco, "drawAxis", None)
+        if draw_axis is not None:
+            draw_axis(frame, camera_matrix, dist_coeffs, rvec, tvec, length)
+
+
+# -- Load camera calibrations ------------------------------------------------
 
 cv_file = cv.FileStorage(CONFIG_CAMERA, cv.FILE_STORAGE_READ)
 cameraMatrix = cv_file.getNode("K").mat()
@@ -202,14 +245,16 @@ if __name__ == '__main__':
             # Reset the counter and process the frame
             i = 0
 
-        markerCorners, markerIds, rejectedCandidates = cv.aruco.detectMarkers(
-            frame, dictionary, parameters=parameters)
+        markerCorners, markerIds, rejectedCandidates = detect_markers(frame)
 
         # Non-empty array of markers
-        if (type(markerIds) != type(None)):
+        if markerIds is not None:
             cv.aruco.drawDetectedMarkers(frame, markerCorners, markerIds)
 
-            # estimatePoseSingleMarkers(markerCorners, size_of_marker_in_real, cameraMatrix, distCoeffs, rvecs, tvecs)
+            # estimatePoseSingleMarkers(
+            #     markerCorners, size_of_marker_in_real, cameraMatrix,
+            #     distCoeffs, rvecs, tvecs
+            # )
             rvecs, tvecs, _objPoints = cv.aruco.estimatePoseSingleMarkers(
                 markerCorners, 50, cameraMatrix, distCoeffs)
 
@@ -229,8 +274,8 @@ if __name__ == '__main__':
                 update_robot(id, res[0], res[1], heading)
 
                 # Display marker coordinates with x,y,z axies
-                cv.aruco.drawAxis(frame, cameraMatrix,
-                                  distCoeffs, rvecs[i], tvecs[i], 100)
+                draw_axes(frame, cameraMatrix,
+                          distCoeffs, rvecs[i], tvecs[i], 100)
 
         cv.imshow('Marker Detector', frame)
 

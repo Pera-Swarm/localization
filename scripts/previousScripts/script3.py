@@ -1,16 +1,37 @@
 import cv2 as cv
-import numpy as np
+from typing import Optional
 
 # Load the predefined dictionary
-dictionary = cv.aruco.Dictionary_get(cv.aruco.DICT_6X6_250)
-
-# Load the dictionary that was used to generate the markers.
-dictionary = cv.aruco.Dictionary_get(cv.aruco.DICT_6X6_250)
+dictionary = cv.aruco.getPredefinedDictionary(cv.aruco.DICT_6X6_250)
 
 # Initialize the detector parameters using default values
-parameters = cv.aruco.DetectorParameters_create()
+parameters = cv.aruco.DetectorParameters()
 
-# Load camera calibrations ---------------------------------------------------
+if hasattr(cv.aruco, "ArucoDetector"):
+    detector: Optional[cv.aruco.ArucoDetector] = cv.aruco.ArucoDetector(
+        dictionary,
+        parameters,
+    )
+else:
+    detector = None
+
+
+def detect_markers(frame):
+    if detector is not None:
+        return detector.detectMarkers(frame)
+    return cv.aruco.detectMarkers(frame, dictionary, parameters=parameters)
+
+
+def draw_axes(frame, camera_matrix, dist_coeffs, rvec, tvec, length) -> None:
+    if hasattr(cv, "drawFrameAxes"):
+        cv.drawFrameAxes(frame, camera_matrix, dist_coeffs, rvec, tvec, length)
+    else:
+        draw_axis = getattr(cv.aruco, "drawAxis", None)
+        if draw_axis is not None:
+            draw_axis(frame, camera_matrix, dist_coeffs, rvec, tvec, length)
+
+
+# Load camera calibrations --------------------------------------------------
 cv_file = cv.FileStorage('../board/calibration_data.txt', cv.FILE_STORAGE_READ)
 cameraMatrix = cv_file.getNode("K").mat()
 distCoeffs = cv_file.getNode("D").mat()
@@ -32,25 +53,39 @@ if __name__ == '__main__':
 
     while frame_captured:
 
-        # detectMarkers(inputImage, dictionary, markerCorners, markerIds, parameters, rejectedCandidates);
-        markerCorners, markerIds, rejectedCandidates = cv.aruco.detectMarkers(frame, dictionary, parameters=parameters)
+        # detectMarkers(inputImage, dictionary, markerCorners,
+        #               markerIds, parameters, rejectedCandidates)
+        markerCorners, markerIds, rejectedCandidates = detect_markers(frame)
 
-        #print(type(markerIds))
+        # print(type(markerIds))
 
         # Non-empty array of markers
-        if (type(markerIds) != type(None)):
+        if markerIds is not None:
 
             # drawDetectedMarkers(outputImage, markerCorners, markerIds)
-            cv.aruco.drawDetectedMarkers(frame, markerCorners, markerIds);
+            cv.aruco.drawDetectedMarkers(frame, markerCorners, markerIds)
 
-            # estimatePoseSingleMarkers(markerCorners, size_of_marker_in_real, cameraMatrix, distCoeffs, rvecs, tvecs);
-            rvecs, tvecs, _objPoints = cv.aruco.estimatePoseSingleMarkers(markerCorners, 50, cameraMatrix, distCoeffs)
+            # estimatePoseSingleMarkers(markerCorners, size_of_marker_in_real,
+            #                           cameraMatrix, distCoeffs, rvecs, tvecs)
+            rvecs, tvecs, _objPoints = cv.aruco.estimatePoseSingleMarkers(
+                markerCorners,
+                50,
+                cameraMatrix,
+                distCoeffs,
+            )
 
             for i in range(len(markerIds)):
-                print(markerIds[i],  tvecs[i][0] ) # rvecs[i],
+                print(markerIds[i], tvecs[i][0])  # rvecs[i],
 
                 # Display marker coordinates with x,y,z axies
-                cv.aruco.drawAxis(frame, cameraMatrix, distCoeffs, rvecs[i], tvecs[i], 100);
+                draw_axes(
+                    frame,
+                    cameraMatrix,
+                    distCoeffs,
+                    rvecs[i],
+                    tvecs[i],
+                    100,
+                )
 
         cv.imshow('Marker Detector', frame)
 
