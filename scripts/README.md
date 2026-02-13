@@ -14,7 +14,8 @@ pip install -r ..\requirements.txt
 
 ## Configuration
 
-Copy the sample configs before running:
+If you run `../run.sh`, missing configs are auto-created from samples on first run.
+If you run `python script.py` directly, copy the sample configs before running:
 
 - config-mapping_sample.yaml -> config-mapping.yaml
 - config-mqtt_sample.yaml -> config-mqtt.yaml

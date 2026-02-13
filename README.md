@@ -34,7 +34,8 @@ pip install -r requirements.txt
 
 ## Configuration
 
-Copy the sample configs in scripts/ before running the main localization script:
+If you run `./run.sh` (Unix-like shells), missing configs are auto-created from samples on first run.
+If you run `python scripts/script.py` directly, copy the sample configs in scripts/ first:
 
 - scripts/config-mapping_sample.yaml -> scripts/config-mapping.yaml
 - scripts/config-mqtt_sample.yaml -> scripts/config-mqtt.yaml
