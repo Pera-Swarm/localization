@@ -4,6 +4,7 @@ import importlib
 import json
 import math
 import time
+from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 from time import sleep
 # import threading
@@ -22,9 +23,27 @@ except ImportError as exc:
         "Missing dependency 'pyyaml'. Install with: pip install pyyaml"
     ) from exc
 
-CONFIG_MQTT = 'config-mqtt.yaml'
-CONFIG_MAPPING = 'config-mapping.yaml'
-CONFIG_CAMERA = 'board/calibration_data.txt'
+SCRIPT_DIR = Path(__file__).resolve().parent
+
+CONFIG_MQTT = SCRIPT_DIR / 'config-mqtt.yaml'
+CONFIG_MAPPING = SCRIPT_DIR / 'config-mapping.yaml'
+CONFIG_CAMERA = SCRIPT_DIR / 'board' / 'calibration_data.txt'
+
+
+def ensure_required_file(
+    path: Path,
+    label: str,
+    sample_name: Optional[str] = None,
+) -> None:
+    if path.is_file():
+        return
+
+    message = f"Missing {label} file: {path}"
+    if sample_name is not None:
+        sample_path = SCRIPT_DIR / sample_name
+        message += f". Copy sample file {sample_path} to {path}"
+    raise FileNotFoundError(message)
+
 
 camera_id = 0
 
@@ -40,7 +59,12 @@ robots: Dict[int, Dict[str, Any]] = {}
 update_xy_threshold = 10  # units
 update_heading_threshold = 2  # degrees
 
-with open(CONFIG_MAPPING, 'r') as file:
+ensure_required_file(
+    CONFIG_MAPPING,
+    'mapping config',
+    'config-mapping_sample.yaml',
+)
+with open(CONFIG_MAPPING, 'r', encoding='utf-8') as file:
     mapping_data = yaml.load(file, Loader=yaml.Loader)
     # print(mapping_data)
     REFERENCE_POINTS = mapping_data['reference_points']
@@ -54,7 +78,8 @@ sub_topic_create = "v10/robot/create"
 # temp topics, for debug purposes
 # sub_topic_update_robot="v1/localization/update/robot"
 
-with open(CONFIG_MQTT, 'r') as file:
+ensure_required_file(CONFIG_MQTT, 'MQTT config', 'config-mqtt_sample.yaml')
+with open(CONFIG_MQTT, 'r', encoding='utf-8') as file:
     mqtt_data = yaml.load(file, Loader=yaml.Loader)
     print(mqtt_data)
     mqtt_server = mqtt_data['mqtt_server']
@@ -195,7 +220,8 @@ def draw_axes(frame, camera_matrix, dist_coeffs, rvec, tvec, length) -> None:
 
 # -- Load camera calibrations ------------------------------------------------
 
-cv_file = cv.FileStorage(CONFIG_CAMERA, cv.FILE_STORAGE_READ)
+ensure_required_file(CONFIG_CAMERA, 'camera calibration')
+cv_file = cv.FileStorage(str(CONFIG_CAMERA), cv.FILE_STORAGE_READ)
 cameraMatrix = cv_file.getNode("K").mat()
 distCoeffs = cv_file.getNode("D").mat()
 cv_file.release()
